@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Interphone · Porte</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050a0e;
+    --surface: #0a1520;
+    --border: #1a3a4a;
+    --accent: #00d4ff;
+    --green: #00ff88;
+    --red: #ff2244;
+    --orange: #ff6b00;
+    --text: #c8e8f0;
+    --muted: #3a6a7a;
+    --glow: 0 0 18px rgba(0,212,255,0.35);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    overflow-x: hidden; position: relative;
+  }
+
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      repeating-linear-gradient(0deg,transparent,transparent 40px,rgba(0,212,255,0.014) 40px,rgba(0,212,255,0.014) 41px),
+      repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(0,212,255,0.014) 40px,rgba(0,212,255,0.014) 41px);
+  }
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:99;
+    background: repeating-linear-gradient(0deg,rgba(0,0,0,0.06) 0px,rgba(0,0,0,0.06) 1px,transparent 1px,transparent 3px);
+  }
+
+  .wrap {
+    width:100%; max-width:480px;
+    padding:20px 16px 50px;
+    display:flex; flex-direction:column; gap:16px;
+    position:relative; z-index:1;
+  }
+
+  /* Header */
+  .hdr {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; background:var(--surface);
+    border:1px solid var(--border); border-top:2px solid var(--accent);
+  }
+  .hdr-logo {
+    font-family:'Share Tech Mono',monospace; font-size:12px;
+    color:var(--accent); letter-spacing:4px; text-shadow:var(--glow);
+  }
+  .hdr-right { display:flex; align-items:center; gap:10px; }
+  .hdr-status {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:var(--muted); letter-spacing:1px;
+  }
+  .dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--muted); transition:all .3s;
+  }
+  .dot.on  { background:var(--green); box-shadow:0 0 8px var(--green); animation:pd 2s infinite; }
+  .dot.ring{ background:var(--orange); box-shadow:0 0 10px var(--orange); animation:pd .4s infinite; }
+  @keyframes pd { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  /* ID Panel */
+  .id-panel {
+    background:var(--surface); border:1px solid var(--border); padding:16px;
+  }
+  .id-lbl {
+    font-family:'Share Tech Mono',monospace; font-size:9px;
+    color:var(--muted); letter-spacing:2px; margin-bottom:8px;
+  }
+  .id-val {
+    font-family:'Share Tech Mono',monospace; font-size:20px;
+    color:var(--accent); letter-spacing:4px; text-shadow:var(--glow);
+    margin-bottom:12px;
+  }
+  .connect-row { display:flex; gap:8px; }
+  .connect-row input {
+    flex:1; background:var(--bg); border:1px solid var(--border);
+    color:var(--text); font-family:'Share Tech Mono',monospace;
+    font-size:12px; padding:9px 12px; letter-spacing:2px; outline:none;
+    transition:border-color .2s;
+  }
+  .connect-row input:focus { border-color:var(--accent); }
+  .btn-lier {
+    background:var(--accent); color:var(--bg); border:none;
+    font-family:'Rajdhani',sans-serif; font-weight:700;
+    font-size:12px; letter-spacing:2px; padding:9px 16px;
+    cursor:pointer; text-transform:uppercase; transition:all .2s; white-space:nowrap;
+  }
+  .btn-lier:hover { background:#33ddff; }
+  .btn-lier:active { transform:scale(.97); }
+
+  /* Caméra */
+  .cam-frame {
+    width:100%; aspect-ratio:4/3;
+    background:#000; border:1px solid var(--border);
+    position:relative; overflow:hidden;
+  }
+  .cam-frame video { width:100%; height:100%; object-fit:cover; display:block; }
+  .cam-corners { position:absolute; inset:0; pointer-events:none; border:1px solid rgba(0,212,255,.12); }
+  .cam-corners::before,.cam-corners::after { content:''; position:absolute; width:22px; height:22px; }
+  .cam-corners::before { top:8px;left:8px; border-top:2px solid var(--accent); border-left:2px solid var(--accent); }
+  .cam-corners::after  { bottom:8px;right:8px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); }
+  .cam-lbl {
+    position:absolute; top:12px;right:12px;
+    font-family:'Share Tech Mono',monospace; font-size:9px;
+    color:var(--accent); letter-spacing:2px; opacity:.6;
+  }
+  .cam-rec {
+    position:absolute; bottom:12px;left:12px;
+    display:none; align-items:center; gap:5px;
+    font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--red);
+  }
+  .cam-rec-dot { width:6px;height:6px;background:var(--red);border-radius:50%; animation:pd 1s infinite; }
+  .cam-off {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px;
+    background:var(--surface);
+  }
+  .cam-off-ico { font-size:40px; opacity:.2; }
+  .cam-off-txt { font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:2px; }
+
+  /* Contrôles */
+  .controls { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* Sonnette */
+  .btn-ring {
+    grid-column:1/-1;
+    background:transparent; border:2px solid var(--orange);
+    color:var(--orange); font-family:'Rajdhani',sans-serif;
+    font-weight:700; font-size:18px; letter-spacing:4px;
+    padding:20px; cursor:pointer; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    position:relative; overflow:hidden; transition:all .2s;
+  }
+  .btn-ring::before {
+    content:''; position:absolute; inset:0;
+    background:var(--orange); transform:scaleX(0);
+    transform-origin:left; transition:transform .15s; z-index:0;
+  }
+  .btn-ring:active::before { transform:scaleX(1); }
+  .btn-ring:active { color:var(--bg); }
+  .btn-ring span,.btn-ring svg { position:relative; z-index:1; }
+  .btn-ring.ringing { animation:rpulse .4s infinite alternate; }
+  @keyframes rpulse {
+    from { box-shadow:0 0 10px rgba(255,107,0,.4); }
+    to   { box-shadow:0 0 30px rgba(255,107,0,.8),0 0 60px rgba(255,107,0,.3); }
+  }
+
+  .btn-sm {
+    background:var(--surface); border:1px solid var(--border);
+    color:var(--text); font-family:'Rajdhani',sans-serif;
+    font-weight:600; font-size:12px; letter-spacing:1.5px;
+    padding:13px 8px; cursor:pointer; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    transition:all .2s;
+  }
+  .btn-sm:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-sm.active-mic { border-color:var(--green); color:var(--green); background:rgba(0,255,136,.05); }
+  .btn-sm.muted-mic  { border-color:var(--red); color:var(--red); background:rgba(255,34,68,.05); }
+  .btn-sm.cam-on     { border-color:var(--green); color:var(--green); }
+
+  /* Toast unlock */
+  .unlock-toast {
+    position:fixed; bottom:36px; left:50%;
+    transform:translateX(-50%) translateY(16px);
+    background:rgba(0,255,136,.1); border:1px solid var(--green);
+    color:var(--green); font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:3px; padding:11px 22px;
+    opacity:0; transition:all .3s; z-index:200; pointer-events:none;
+  }
+  .unlock-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Log */
+  .log-panel { background:var(--surface); border:1px solid var(--border); padding:12px; }
+  .log-ttl { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:2px; margin-bottom:8px; }
+  .log-body { font-family:'Share Tech Mono',monospace; font-size:10px; line-height:1.85; max-height:80px; overflow-y:auto; }
+  .entry { display:flex; gap:8px; }
+  .entry .t { color:var(--accent); min-width:52px; opacity:.6; }
+  .entry.ok .m  { color:var(--green); }
+  .entry.err .m { color:var(--red); }
+  .entry.info .m{ color:var(--text); }
+
+  /* Status bar */
+  .status-bar {
+    background:var(--surface); border:1px solid var(--border);
+    border-bottom:2px solid var(--accent);
+    padding:9px 14px; display:flex; align-items:center; gap:8px;
+  }
+  .status-txt { font-family:'Share Tech Mono',monospace; font-size:10px; flex:1; letter-spacing:1px; }
+  .status-txt.idle      { color:var(--muted); }
+  .status-txt.connected { color:var(--green); }
+  .status-txt.calling   { color:var(--orange); }
+  .status-txt.error     { color:var(--red); }
+
+  ::-webkit-scrollbar { width:3px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <span class="hdr-logo">⬡ PORTE</span>
+    <div class="hdr-right">
+      <span class="hdr-status" id="hdrStatus">HORS LIGNE</span>
+      <div class="dot" id="dot1"></div>
+    </div>
+  </div>
+
+  <!-- ID -->
+  <div class="id-panel">
+    <div class="id-lbl">▸ MON ID FIXE</div>
+    <div class="id-val" id="myId">porte-nexus</div>
+    <div class="connect-row">
+      <input type="text" id="targetId" placeholder="chambre-nexus" value="chambre-nexus" maxlength="30">
+      <button class="btn-lier" onclick="connectToChambre()">LIER</button>
+    </div>
+  </div>
+
+  <!-- Caméra -->
+  <div class="cam-frame">
+    <div class="cam-off" id="camOff">
+      <div class="cam-off-ico">📷</div>
+      <div class="cam-off-txt">CAMÉRA INACTIVE</div>
+    </div>
+    <video id="localVideo" autoplay muted playsinline style="display:none;"></video>
+    <div class="cam-corners"></div>
+    <span class="cam-lbl">LOCAL PREVIEW</span>
+    <div class="cam-rec" id="camRec">
+      <div class="cam-rec-dot"></div><span>LIVE</span>
+    </div>
+  </div>
+
+  <!-- Contrôles -->
+  <div class="controls">
+    <button class="btn-ring" id="btnRing" onclick="ringDoorbell()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+      <span id="ringLabel">SONNER</span>
+    </button>
+
+    <button class="btn-sm active-mic" id="btnMic" onclick="toggleMic()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      <span id="micLbl">MICRO</span>
+    </button>
+
+    <button class="btn-sm" id="btnCam" onclick="startCamera()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 7l-7 5 7 5V7z"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      <span id="camLbl">ACTIVER CAM</span>
+    </button>
+  </div>
+
+  <!-- Log -->
+  <div class="log-panel">
+    <div class="log-ttl">▸ JOURNAL</div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar">
+    <div class="dot" id="dot2"></div>
+    <span class="status-txt idle" id="statusTxt">En attente...</span>
+  </div>
+
+</div>
+
+<div class="unlock-toast" id="unlockToast">🔓 DÉVERROUILLÉ</div>
+
+<script>
+const PCFG = { host:'0.peerjs.com', port:443, secure:true, path:'/', debug:0 };
+
+let peer, conn, call, localStream;
+let micEnabled = true, camActive = false;
+
+window.onload = () => initPeer();
+
+function initPeer() {
+  peer = new Peer('porte-nexus', PCFG);
+
+  peer.on('open', id => {
+    document.getElementById('myId').textContent = id.toUpperCase();
+    setStatus('connected', 'Prêt · ID : ' + id);
+    setDots('on');
+    document.getElementById('hdrStatus').textContent = 'EN LIGNE';
+    log('ok', 'ID fixe actif : ' + id);
+  });
+
+  peer.on('connection', c => {
+    conn = c; setupData(conn);
+    log('ok', 'Chambre connectée');
+    setStatus('connected', 'Chambre liée');
+    setDots('on');
+  });
+
+  peer.on('call', inc => {
+    inc.answer(localStream || undefined);
+    call = inc;
+  });
+
+  peer.on('error', e => {
+    log('err', 'Erreur : ' + e.type);
+    setStatus('error', 'Erreur réseau');
+    setTimeout(initPeer, 5000);
+  });
+
+  peer.on('disconnected', () => {
+    setStatus('idle', 'Déconnecté');
+    setDots('');
+    document.getElementById('hdrStatus').textContent = 'HORS LIGNE';
+    peer.reconnect();
+  });
+}
+
+function connectToChambre() {
+  const tid = document.getElementById('targetId').value.trim().toLowerCase();
+  if (!tid || !peer) return;
+  conn = peer.connect(tid, { reliable:true });
+  setupData(conn);
+  log('info', 'Connexion vers ' + tid + '...');
+  setStatus('calling', 'Connexion...');
+  if (localStream) startCall(tid);
+}
+
+function setupData(c) {
+  c.on('open', () => {
+    log('ok', 'Canal chambre ouvert');
+    setStatus('connected', 'Connecté chambre');
+    setDots('on');
+    document.getElementById('hdrStatus').textContent = 'EN LIGNE';
+  });
+  c.on('data', d => {
+    if (d.type === 'unlock') { showUnlockToast(); log('ok', 'DÉVERROUILLAGE reçu'); }
+    if (d.type === 'call_request') startCall(conn.peer);
+  });
+  c.on('close', () => {
+    setStatus('idle', 'Déconnecté');
+    setDots('');
+    document.getElementById('hdrStatus').textContent = 'HORS LIGNE';
+    log('err', 'Connexion fermée');
+  });
+}
+
+async function startCamera() {
+  if (camActive) return;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} },
+      audio:true
+    });
+    const v = document.getElementById('localVideo');
+    v.srcObject = localStream; v.style.display = 'block';
+    document.getElementById('camOff').style.display = 'none';
+    document.getElementById('camRec').style.display = 'flex';
+    camActive = true;
+    document.getElementById('camLbl').textContent = 'CAM ON';
+    document.getElementById('btnCam').classList.add('cam-on');
+    log('ok', 'Caméra activée');
+    if (conn && conn.open) startCall(conn.peer);
+  } catch(e) {
+    log('err', 'Caméra refusée');
+    setStatus('error', 'Caméra refusée');
+  }
+}
+
+function startCall(tid) {
+  if (!localStream || !peer) return;
+  call = peer.call(tid, localStream);
+  log('ok', 'Appel vidéo envoyé');
+}
+
+function toggleMic() {
+  micEnabled = !micEnabled;
+  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+  const btn = document.getElementById('btnMic');
+  document.getElementById('micLbl').textContent = micEnabled ? 'MICRO' : 'MUET';
+  btn.className = 'btn-sm ' + (micEnabled ? 'active-mic' : 'muted-mic');
+}
+
+function ringDoorbell() {
+  if (!conn || !conn.open) {
+    log('err', 'Chambre non connectée');
+    setStatus('error', 'Chambre non connectée');
+    return;
+  }
+  conn.send({ type:'ring', ts:Date.now() });
+  const btn = document.getElementById('btnRing');
+  const lbl = document.getElementById('ringLabel');
+  btn.classList.add('ringing'); lbl.textContent = 'APPEL...';
+  setTimeout(() => { btn.classList.remove('ringing'); lbl.textContent = 'SONNER'; }, 4000);
+  log('info', 'Sonnette activée');
+  if (localStream && conn.peer) startCall(conn.peer);
+  else if (conn.peer) conn.send({ type:'call_request' });
+}
+
+// Helpers
+function setStatus(type, msg) {
+  const el = document.getElementById('statusTxt');
+  el.className = 'status-txt ' + type;
+  el.textContent = msg;
+}
+function setDots(s) {
+  ['dot1','dot2'].forEach(id => {
+    document.getElementById(id).className = 'dot' + (s ? ' '+s : '');
+  });
+}
+function showUnlockToast() {
+  const t = document.getElementById('unlockToast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+function log(type, msg) {
+  const now = new Date();
+  const t = now.getHours().toString().padStart(2,'0')+':'+
+            now.getMinutes().toString().padStart(2,'0')+':'+
+            now.getSeconds().toString().padStart(2,'0');
+  const el = document.getElementById('logBody');
+  const e = document.createElement('div');
+  e.className = 'entry '+type;
+  e.innerHTML = `<span class="t">${t}</span><span class="m">${msg}</span>`;
+  el.insertBefore(e, el.firstChild);
+  if (el.children.length > 10) el.removeChild(el.lastChild);
+}
+</script>
+</body>
+</html>

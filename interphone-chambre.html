@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Interphone · Chambre</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020a05;
+    --surface: #071210;
+    --surface2: #0b1a15;
+    --border: #0e2e20;
+    --accent: #00ff88;
+    --accent2: #ffcc00;
+    --red: #ff2244;
+    --orange: #ff6b00;
+    --blue: #00bbff;
+    --text: #a8dfc0;
+    --muted: #1f5038;
+    --glow: 0 0 18px rgba(0,255,136,0.35);
+    --glow-y: 0 0 18px rgba(255,204,0,0.35);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html, body { height:100%; overflow:hidden; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Grille + scanlines */
+  body::before {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      repeating-linear-gradient(0deg,transparent,transparent 48px,rgba(0,255,136,0.014) 48px,rgba(0,255,136,0.014) 49px),
+      repeating-linear-gradient(90deg,transparent,transparent 48px,rgba(0,255,136,0.014) 48px,rgba(0,255,136,0.014) 49px);
+  }
+  body::after {
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:99;
+    background: repeating-linear-gradient(0deg,rgba(0,0,0,0.055) 0px,rgba(0,0,0,0.055) 1px,transparent 1px,transparent 3px);
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    position: relative; z-index:2;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    padding: 0 20px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .topbar-logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 5px;
+    text-shadow: var(--glow);
+  }
+
+  .topbar-right {
+    display: flex; align-items: center; gap: 18px;
+  }
+
+  .live-pill {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px; letter-spacing: 2px;
+    background: var(--red); color: #000;
+    padding: 2px 8px;
+    opacity: 0; transition: opacity .3s;
+  }
+  .live-pill.on { opacity:1; animation: blink 1.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  .conn-row {
+    display:flex; align-items:center; gap:7px;
+    font-family:'Share Tech Mono',monospace; font-size:10px; color:var(--muted);
+  }
+  .dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--muted); transition:all .3s;
+  }
+  .dot.on  { background:var(--accent); box-shadow:0 0 8px var(--accent); animation:pdot 2s infinite; }
+  .dot.ring{ background:var(--orange); box-shadow:0 0 12px var(--orange); animation:pdot .4s infinite; }
+  @keyframes pdot { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+  .clock {
+    font-family:'Share Tech Mono',monospace; font-size:13px;
+    color:rgba(0,255,136,.55); letter-spacing:2px;
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    flex:1; display:flex; min-height:0;
+    position: relative; z-index:1;
+  }
+
+  /* ── LEFT: VIDÉO ── */
+  .video-col {
+    flex: 1.65;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    min-width: 0;
+  }
+
+  .video-wrap {
+    flex:1; position:relative; background:#000; overflow:hidden;
+  }
+
+  .video-wrap video {
+    width:100%; height:100%; object-fit:cover; display:block;
+  }
+
+  /* Overlay caméra */
+  .vid-overlay {
+    position:absolute; inset:0; pointer-events:none;
+  }
+  .c { position:absolute; width:26px; height:26px; }
+  .c-tl { top:12px;left:12px; border-top:2px solid var(--accent); border-left:2px solid var(--accent); }
+  .c-tr { top:12px;right:12px; border-top:2px solid var(--accent); border-right:2px solid var(--accent); }
+  .c-bl { bottom:12px;left:12px; border-bottom:2px solid var(--accent); border-left:2px solid var(--accent); }
+  .c-br { bottom:12px;right:12px; border-bottom:2px solid var(--accent); border-right:2px solid var(--accent); }
+
+  .vid-label {
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    font-family:'Share Tech Mono',monospace; font-size:9px;
+    color:rgba(0,255,136,.45); letter-spacing:4px;
+  }
+
+  .vid-ts {
+    position:absolute; bottom:12px; left:14px;
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:rgba(0,255,136,.5); letter-spacing:1px;
+  }
+
+  /* Écran attente */
+  .waiting {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px;
+    background:var(--surface);
+  }
+  .waiting-ico { font-size:52px; opacity:.15; }
+  .waiting-txt {
+    font-family:'Share Tech Mono',monospace; font-size:11px;
+    color:var(--muted); letter-spacing:3px; text-align:center; line-height:2;
+  }
+
+  /* Overlay sonnette */
+  .ring-overlay {
+    position:absolute; inset:0; z-index:10;
+    display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px;
+    background:rgba(255,107,0,.1);
+  }
+  .ring-overlay.active { display:flex; animation:rflash .5s infinite alternate; }
+  @keyframes rflash {
+    from { background:rgba(255,107,0,.06); }
+    to   { background:rgba(255,107,0,.22); }
+  }
+  .ring-h { font-family:'Share Tech Mono',monospace; font-size:20px; color:var(--orange); letter-spacing:5px; text-shadow:0 0 20px var(--orange); }
+  .ring-s { font-family:'Share Tech Mono',monospace; font-size:10px; color:rgba(255,107,0,.7); letter-spacing:3px; }
+
+  /* Barre connexion bas vidéo */
+  .vid-connect-bar {
+    background:var(--surface2);
+    border-top:1px solid var(--border);
+    padding:8px 14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .vid-connect-bar input {
+    flex:1; background:var(--bg); border:1px solid var(--border);
+    color:var(--text); font-family:'Share Tech Mono',monospace;
+    font-size:11px; padding:6px 10px; letter-spacing:2px; outline:none;
+    transition:border-color .2s;
+  }
+  .vid-connect-bar input:focus { border-color:var(--accent); }
+  .vid-connect-bar button {
+    background:var(--accent); color:var(--bg);
+    border:none; font-family:'Rajdhani',sans-serif;
+    font-weight:700; font-size:11px; letter-spacing:2px;
+    padding:7px 14px; cursor:pointer; text-transform:uppercase;
+    transition:all .2s; white-space:nowrap;
+  }
+  .vid-connect-bar button:hover { background:#33ffaa; }
+
+  /* ── RIGHT: CONTRÔLES ── */
+  .ctrl-col {
+    width: 300px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Sections */
+  .section {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .section-title {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; color:var(--muted);
+    letter-spacing:3px; margin-bottom:12px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .section-title::after {
+    content:''; flex:1; height:1px; background:var(--border);
+  }
+
+  /* Mon ID */
+  .my-id {
+    font-family:'Share Tech Mono',monospace;
+    font-size:18px; color:var(--accent);
+    letter-spacing:4px; text-shadow:var(--glow);
+    margin-bottom:4px;
+  }
+  .my-id-hint {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; color:var(--muted); letter-spacing:1px;
+  }
+
+  /* Boutons action */
+  .btn-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+  }
+
+  .abtn {
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--text); font-family:'Rajdhani',sans-serif;
+    font-weight:600; font-size:12px; letter-spacing:1.5px;
+    padding:14px 8px; cursor:pointer; text-transform:uppercase;
+    display:flex; flex-direction:column; align-items:center; gap:7px;
+    transition:all .2s; position:relative; overflow:hidden;
+  }
+  .abtn:active { transform:scale(.96); }
+
+  .abtn.answer { border-color:var(--accent); color:var(--accent); }
+  .abtn.answer:hover { background:rgba(0,255,136,.06); }
+
+  .abtn.hangup { border-color:var(--red); color:var(--red); }
+  .abtn.hangup:hover { background:rgba(255,34,68,.06); }
+
+  .abtn.mic { }
+  .abtn.mic.muted { border-color:var(--red); color:var(--red); background:rgba(255,34,68,.05); }
+
+  /* Déverrouiller — pleine largeur */
+  .btn-unlock {
+    width:100%; margin-top:8px;
+    background:transparent; border:2px solid var(--accent2);
+    color:var(--accent2); font-family:'Rajdhani',sans-serif;
+    font-weight:700; font-size:16px; letter-spacing:5px;
+    padding:18px; cursor:pointer; text-transform:uppercase;
+    display:flex; align-items:center; justify-content:center; gap:12px;
+    transition:all .2s; position:relative; overflow:hidden;
+  }
+  .btn-unlock::before {
+    content:''; position:absolute; inset:0;
+    background:var(--accent2); transform:scaleX(0);
+    transform-origin:left; transition:transform .2s; z-index:0;
+  }
+  .btn-unlock:active::before { transform:scaleX(1); }
+  .btn-unlock:active { color:var(--bg); }
+  .btn-unlock span, .btn-unlock svg { position:relative; z-index:1; }
+  .btn-unlock.flash { animation:unlock-flash .6s ease; }
+  @keyframes unlock-flash {
+    0%   { box-shadow:none; }
+    30%  { box-shadow:0 0 40px rgba(255,204,0,.8), 0 0 80px rgba(255,204,0,.4); }
+    100% { box-shadow:none; }
+  }
+
+  /* Volume */
+  .vol-row {
+    display:flex; align-items:center; gap:10px; margin-top:10px;
+  }
+  .vol-lbl {
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px; color:var(--muted); letter-spacing:2px; min-width:60px;
+  }
+  input[type=range] {
+    flex:1; -webkit-appearance:none; height:3px;
+    background:var(--border); outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:14px; height:14px;
+    background:var(--accent); border-radius:0; cursor:pointer;
+    box-shadow:0 0 6px var(--accent);
+  }
+  .vol-val {
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--muted); min-width:30px; text-align:right;
+  }
+
+  /* Log */
+  .log-entries {
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; line-height:1.85;
+    max-height:120px; overflow-y:auto;
+  }
+  .entry { display:flex; gap:8px; }
+  .entry .t { color:var(--accent); min-width:52px; opacity:.6; }
+  .entry.ok .m  { color:var(--accent); }
+  .entry.err .m { color:var(--red); }
+  .entry.warn .m{ color:var(--orange); }
+  .entry.info .m{ color:var(--text); }
+
+  .log-hdr {
+    display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;
+  }
+  .log-clr {
+    font-family:'Share Tech Mono',monospace; font-size:9px;
+    background:none; border:1px solid var(--border);
+    color:var(--muted); padding:2px 8px; cursor:pointer; letter-spacing:1px;
+  }
+  .log-clr:hover { color:var(--accent); border-color:var(--accent); }
+
+  /* Toast */
+  .toast {
+    position:fixed; bottom:24px; left:50%;
+    transform:translateX(-50%) translateY(16px);
+    font-family:'Share Tech Mono',monospace; font-size:11px;
+    letter-spacing:3px; padding:10px 24px;
+    opacity:0; transition:all .3s; z-index:500; pointer-events:none;
+  }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .toast.success { background:rgba(0,255,136,.09); border:1px solid var(--accent); color:var(--accent); }
+  .toast.warning { background:rgba(255,107,0,.09); border:1px solid var(--orange); color:var(--orange); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:3px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); }
+
+  /* ── MODE PORTRAIT (tablette verticale / mobile) ── */
+  @media (orientation: portrait), (max-width: 600px) {
+    html, body { height:auto; overflow:auto; }
+    .main { flex-direction:column; }
+    .video-col { border-right:none; border-bottom:1px solid var(--border); }
+    .video-wrap { aspect-ratio:16/9; height:auto; }
+    .ctrl-col { width:100%; overflow-y:visible; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <span class="topbar-logo">⬡ NEXUS · CHAMBRE</span>
+  <div class="topbar-right">
+    <div class="live-pill" id="livePill">● LIVE</div>
+    <div class="conn-row">
+      <div class="dot" id="mainDot"></div>
+      <span id="connLabel">HORS LIGNE</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- COL GAUCHE: VIDÉO -->
+  <div class="video-col">
+    <div class="video-wrap" id="videoWrap">
+
+      <div class="waiting" id="waitingScreen">
+        <div class="waiting-ico">📺</div>
+        <div class="waiting-txt">EN ATTENTE<br>DU FLUX PORTE</div>
+      </div>
+
+      <video id="remoteVideo" autoplay playsinline style="display:none;width:100%;height:100%;object-fit:cover;"></video>
+
+      <div class="vid-overlay">
+        <div class="c c-tl"></div><div class="c c-tr"></div>
+        <div class="c c-bl"></div><div class="c c-br"></div>
+        <div class="vid-label">NEXUS · INTERPHONE</div>
+        <div class="vid-ts" id="vidTs"></div>
+      </div>
+
+      <div class="ring-overlay" id="ringOverlay">
+        <div class="ring-h">🔔 VISITEUR</div>
+        <div class="ring-s">QUELQU'UN EST À LA PORTE</div>
+      </div>
+
+    </div>
+
+    <!-- Barre connexion bas -->
+    <div class="vid-connect-bar">
+      <input type="text" id="doorId" placeholder="porte-nexus" value="porte-nexus" maxlength="30">
+      <button onclick="connectToDoor()">CONNECTER</button>
+    </div>
+  </div>
+
+  <!-- COL DROITE: CONTRÔLES -->
+  <div class="ctrl-col">
+
+    <!-- Mon ID -->
+    <div class="section">
+      <div class="section-title">▸ MON IDENTIFIANT</div>
+      <div class="my-id" id="myId">chambre-nexus</div>
+      <div class="my-id-hint">Donner cet ID au téléphone porte</div>
+    </div>
+
+    <!-- Actions appel -->
+    <div class="section">
+      <div class="section-title">▸ APPEL</div>
+      <div class="btn-grid">
+        <button class="abtn answer" onclick="answerCall()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+          </svg>
+          RÉPONDRE
+        </button>
+        <button class="abtn hangup" onclick="hangUp()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="transform:rotate(135deg)">
+            <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+          </svg>
+          REFUSER
+        </button>
+        <button class="abtn mic" id="btnMic" onclick="toggleMic()" style="grid-column:1/-1">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+          <span id="micLabel">MICRO ON</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Déverrouiller -->
+    <div class="section">
+      <div class="section-title">▸ ACCÈS</div>
+      <button class="btn-unlock" id="btnUnlock" onclick="sendUnlock()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+        </svg>
+        <span>DÉVERROUILLER</span>
+      </button>
+    </div>
+
+    <!-- Volume -->
+    <div class="section">
+      <div class="section-title">▸ VOLUME SONNETTE</div>
+      <div class="vol-row">
+        <span class="vol-lbl">SONNETTE</span>
+        <input type="range" id="volRing" min="0" max="1" step="0.05" value="0.8" oninput="setVol('ring',this.value)">
+        <span class="vol-val" id="volRingVal">80%</span>
+      </div>
+      <div class="vol-row">
+        <span class="vol-lbl">ACCÈS</span>
+        <input type="range" id="volUnlock" min="0" max="1" step="0.05" value="0.75" oninput="setVol('unlock',this.value)">
+        <span class="vol-val" id="volUnlockVal">75%</span>
+      </div>
+    </div>
+
+    <!-- Journal -->
+    <div class="section" style="flex:1;">
+      <div class="log-hdr">
+        <div class="section-title" style="margin-bottom:0;">▸ JOURNAL</div>
+        <button class="log-clr" onclick="clearLog()">EFFACER</button>
+      </div>
+      <div class="log-entries" id="logEntries"></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  AUDIO ENGINE
+// ══════════════════════════════════════════
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+let volRing = 0.8, volUnlock = 0.75;
+let ringInterval = null;
+
+function setVol(type, v) {
+  if (type === 'ring') {
+    volRing = parseFloat(v);
+    document.getElementById('volRingVal').textContent = Math.round(v*100)+'%';
+  } else {
+    volUnlock = parseFloat(v);
+    document.getElementById('volUnlockVal').textContent = Math.round(v*100)+'%';
+  }
+}
+
+// Sonnette entrante
+function playRing() {
+  const freqs = [880, 660, 880, 660];
+  let t = AC.currentTime;
+  freqs.forEach((f, i) => {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.frequency.value = f; o.type = 'sine';
+    g.gain.setValueAtTime(0, t + i*.16);
+    g.gain.linearRampToValueAtTime(volRing*.45, t + i*.16 + .025);
+    g.gain.linearRampToValueAtTime(0, t + i*.16 + .14);
+    o.start(t + i*.16); o.stop(t + i*.16 + .15);
+  });
+}
+
+function startRing() {
+  if (ringInterval) return;
+  if (AC.state === 'suspended') AC.resume();
+  playRing();
+  ringInterval = setInterval(playRing, 1300);
+}
+function stopRing() {
+  if (ringInterval) { clearInterval(ringInterval); ringInterval = null; }
+}
+
+// ── Son "Accès autorisé" ──────────────────
+function playAccessGranted() {
+  if (AC.state === 'suspended') AC.resume();
+
+  // 3 bips montants nets
+  const beeps = [
+    { f: 880,  t: 0,    dur: .08 },
+    { f: 1109, t: .10,  dur: .08 },
+    { f: 1397, t: .20,  dur: .18 },
+  ];
+
+  beeps.forEach(({ f, t, dur }) => {
+    const o = AC.createOscillator();
+    const g = AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type = 'square';
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0, AC.currentTime + t);
+    g.gain.linearRampToValueAtTime(volUnlock * .35, AC.currentTime + t + .01);
+    g.gain.linearRampToValueAtTime(0, AC.currentTime + t + dur);
+    o.start(AC.currentTime + t);
+    o.stop(AC.currentTime + t + dur + .01);
+  });
+
+  // Voix synthétique TTS
+  setTimeout(() => {
+    if (!window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance('Accès autorisé');
+    u.lang = 'fr-FR';
+    u.rate = 0.9;
+    u.pitch = 0.85;
+    u.volume = volUnlock;
+    speechSynthesis.speak(u);
+  }, 420);
+}
+
+// ══════════════════════════════════════════
+//  PEER
+// ══════════════════════════════════════════
+let peer, conn, localStream;
+let micEnabled = true;
+
+window.onload = () => { initPeer(); startClock(); };
+
+function initPeer() {
+  peer = new Peer('chambre-nexus', {
+    host:'0.peerjs.com', port:443, secure:true, path:'/', debug:0
+  });
+
+  peer.on('open', id => {
+    document.getElementById('myId').textContent = id.toUpperCase();
+    setDot('on'); setLabel('EN LIGNE');
+    log('ok', 'ID actif : ' + id);
+  });
+
+  peer.on('connection', c => {
+    conn = c; setupData(conn);
+    log('ok', 'Porte connectée');
+  });
+
+  peer.on('call', inc => {
+    log('info', 'Flux vidéo entrant...');
+    inc.answer();
+    inc.on('stream', s => { showStream(s); log('ok', 'Flux vidéo actif'); });
+  });
+
+  peer.on('error', e => {
+    log('err', 'Erreur : ' + e.type);
+    setTimeout(initPeer, 5000);
+  });
+
+  peer.on('disconnected', () => {
+    setDot(''); setLabel('HORS LIGNE');
+    peer.reconnect();
+  });
+}
+
+function connectToDoor() {
+  const did = document.getElementById('doorId').value.trim().toLowerCase();
+  if (!did || !peer) return;
+  conn = peer.connect(did, { reliable:true });
+  setupData(conn);
+  log('info', 'Connexion vers ' + did + '...');
+}
+
+function setupData(c) {
+  c.on('open', () => {
+    log('ok', 'Canal porte ouvert');
+    setDot('on'); setLabel('PORTE LIÉE');
+  });
+  c.on('data', d => {
+    if (d.type === 'ring')   handleRing();
+    if (d.type === 'unlock_ack') log('info', 'Porte : signal reçu');
+  });
+  c.on('close', () => {
+    setDot(''); setLabel('PORTE DÉCO.');
+    stopRing();
+    document.getElementById('ringOverlay').classList.remove('active');
+    log('err', 'Porte déconnectée');
+  });
+}
+
+// ── Sonnette ─────────────────────────────
+let ringTO;
+function handleRing() {
+  log('warn', '🔔 Sonnette — visiteur à la porte');
+  startRing();
+  setDot('ring');
+  document.getElementById('ringOverlay').classList.add('active');
+  clearTimeout(ringTO);
+  ringTO = setTimeout(() => {
+    stopRing();
+    document.getElementById('ringOverlay').classList.remove('active');
+    setDot('on');
+  }, 15000);
+  if (navigator.vibrate) navigator.vibrate([300,100,300,100,300]);
+  showToast('🔔 VISITEUR À LA PORTE', 'warning', 6000);
+}
+
+// ── Vidéo ─────────────────────────────────
+function showStream(s) {
+  const v = document.getElementById('remoteVideo');
+  v.srcObject = s; v.style.display = 'block';
+  document.getElementById('waitingScreen').style.display = 'none';
+  document.getElementById('livePill').classList.add('on');
+}
+
+// ── Actions ───────────────────────────────
+async function answerCall() {
+  stopRing();
+  document.getElementById('ringOverlay').classList.remove('active');
+  setDot('on');
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:false });
+    log('ok', 'Micro activé');
+  } catch(e) { log('err', 'Micro refusé'); }
+  log('ok', 'Appel répondu');
+  showToast('CONNEXION ÉTABLIE', 'success', 3000);
+}
+
+function hangUp() {
+  stopRing();
+  document.getElementById('ringOverlay').classList.remove('active');
+  setDot('on');
+  log('info', 'Appel terminé');
+  showToast('APPEL TERMINÉ', 'warning', 2000);
+}
+
+function sendUnlock() {
+  if (!conn || !conn.open) {
+    log('err', 'Non connecté à la porte');
+    showToast('PORTE NON CONNECTÉE', 'warning', 3000);
+    return;
+  }
+  conn.send({ type:'unlock', ts:Date.now() });
+  log('ok', '🔓 Signal déverrouillage envoyé');
+
+  // Son accès autorisé
+  playAccessGranted();
+
+  // Feedback visuel bouton
+  const btn = document.getElementById('btnUnlock');
+  btn.classList.add('flash');
+  setTimeout(() => btn.classList.remove('flash'), 700);
+
+  showToast('🔓 ACCÈS AUTORISÉ', 'success', 4000);
+}
+
+function toggleMic() {
+  micEnabled = !micEnabled;
+  if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+  const btn = document.getElementById('btnMic');
+  document.getElementById('micLabel').textContent = micEnabled ? 'MICRO ON' : 'MICRO MUET';
+  if (micEnabled) btn.classList.remove('muted');
+  else btn.classList.add('muted');
+}
+
+// ── Horloge ───────────────────────────────
+function startClock() {
+  const tick = () => {
+    const d = new Date();
+    const s = d.getHours().toString().padStart(2,'0') + ':' +
+              d.getMinutes().toString().padStart(2,'0') + ':' +
+              d.getSeconds().toString().padStart(2,'0');
+    document.getElementById('clock').textContent = s;
+    document.getElementById('vidTs').textContent = s;
+  };
+  tick(); setInterval(tick, 1000);
+}
+
+// ── Helpers UI ────────────────────────────
+function setDot(s) {
+  document.getElementById('mainDot').className = 'dot' + (s ? ' '+s : '');
+}
+function setLabel(t) {
+  document.getElementById('connLabel').textContent = t;
+}
+function log(type, msg) {
+  const now = new Date();
+  const t = now.getHours().toString().padStart(2,'0')+':'+
+            now.getMinutes().toString().padStart(2,'0')+':'+
+            now.getSeconds().toString().padStart(2,'0');
+  const el = document.getElementById('logEntries');
+  const e = document.createElement('div');
+  e.className = 'entry '+type;
+  e.innerHTML = `<span class="t">${t}</span><span class="m">${msg}</span>`;
+  el.insertBefore(e, el.firstChild);
+  if (el.children.length > 14) el.removeChild(el.lastChild);
+}
+function clearLog() { document.getElementById('logEntries').innerHTML = ''; }
+
+let toastT;
+function showToast(msg, type, dur) {
+  clearTimeout(toastT);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast '+type+' show';
+  toastT = setTimeout(() => el.classList.remove('show'), dur || 3000);
+}
+</script>
+</body>
+</html>
